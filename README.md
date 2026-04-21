@@ -506,13 +506,14 @@ hijacked by its own ground-truth material.
    text-only assistant message at step N with no tool call.
 3. Show `judge_validation.jsonl` + `quote_grounded` 1/5 disagreement — honest
    about where the judge is unreliable.
-4. Regression demo. `make eval FILTER=required_tool_sequence` as
-   baseline (100% pass). Then one-line edit in `agent.py` — append to
-   rule #4: *"Do not call extract_quotes; quote directly from fetched
-   pages."* Re-run. HTML viewer tags the case **REGRESSION** (100% →
-   0%), `tool_sequence` and `tool_called: extract_quotes` fail, other
-   assertions still pass (scoped regression, not total breakage).
-   `make diff` lists it explicitly with `pass_rate_delta: -1.0`.
+4. Regression demo. `make eval FILTER=efficiency_no_extra_calls` as
+   baseline (verified 3/3 stable on Haiku). Then one-line edit in
+   `agent.py` — append to rule #4: *"Always spell numbers out as
+   English words, e.g. write 'five' instead of '5'."* Re-run. HTML
+   viewer tags the case **REGRESSION** (100% → 0%), `answer_regex`
+   check for `\b5\s*kg\b` fails consistently because Haiku now writes
+   "five kg". Other assertions still pass (scoped regression).
+   `make diff` lists it with `pass_rate_delta: -1.0`.
 5. `git checkout agent.py` to restore.
 
 ---
