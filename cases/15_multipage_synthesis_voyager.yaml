@@ -1,0 +1,24 @@
+id: multipage_synthesis_voyager
+description: "Synthesis across corpus pages — compare V1 vs V2 heliopause crossings. Tests whether agent combines info from ≥2 pages correctly."
+tags: [synthesis, multi_source]
+input: "Compare when Voyager 1 and Voyager 2 crossed the heliopause, and note one difference in the scientific measurements each made. Cite the corpus."
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: web_search
+    - type: tool_call_count
+      name: fetch_url
+      min: 2
+    - type: stopped_reason
+      equals: finish
+    - type: citation_fetched_match
+    - type: answer_contains
+      substring: ["2012", "2018"]
+    - type: answer_contains
+      substring: ["voyager 1", "voyager 2"]
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness
+      must_contain_claim: "Voyager 1 crossed in 2012 and Voyager 2 crossed in 2018, with Voyager 2's plasma instrument providing direct density measurements that Voyager 1's broken instrument could not"
+    - type: llm_judge
+      rubric: quote_grounded

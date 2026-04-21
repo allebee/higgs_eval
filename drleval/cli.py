@@ -18,6 +18,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from . import cache as _cache
 from .agent_adapter import load_trace
 from .loader import load_cases
 from .reporter import aggregate_stats, build_report, diff_reports, write_report
@@ -38,6 +39,11 @@ def _collect_trace_messages(traces_dir: Path) -> dict[tuple[str, int], list[dict
 
 def cmd_run(args: argparse.Namespace) -> int:
     load_dotenv()
+    if args.cache_dir:
+        os.environ["DRLEVAL_CACHE_DIR"] = args.cache_dir
+        _cache.install(Path(args.cache_dir))
+    elif os.getenv("DRLEVAL_CACHE_DIR"):
+        _cache.install(Path(os.environ["DRLEVAL_CACHE_DIR"]))
     cases_dir = Path(args.cases)
     out_dir = Path(args.out)
     traces_dir = Path(args.traces or out_dir / "traces")
@@ -115,11 +121,28 @@ def _render_and_print(json_path: Path, out_dir: Path, traces_dir: Path) -> None:
     prev = out_dir / "previous.json"
     prev_obj = json.loads(prev.read_text()) if prev.exists() else None
     diff = diff_reports(report, prev_obj) if prev_obj else None
+
+    # Collect previous-run trace messages keyed by case_id, so the viewer can
+    # render a message-level diff on demand. Previous report records the
+    # trace_path for each run; we read that file if it still exists.
+    prev_traces_by_case: dict[str, list[dict]] = {}
+    if prev_obj:
+        for c in prev_obj.get("cases", []):
+            for r in c.get("runs", []):
+                tp = r.get("trace_path")
+                if tp and Path(tp).exists():
+                    try:
+                        t = load_trace(Path(tp))
+                        prev_traces_by_case.setdefault(c["case_id"], t.messages)
+                    except Exception:
+                        pass
+
     html_path = out_dir / "latest.html"
     render_html(
         report,
         diff=diff.__dict__ if diff else None,
         trace_messages_by_run=_collect_trace_messages(traces_dir),
+        prev_trace_messages_by_case=prev_traces_by_case,
         out_path=html_path,
     )
     agg = report["aggregate"]
@@ -151,6 +174,11 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=float(os.getenv("DRLEVAL_MAX_USD", "0") or 0),
         help="abort admitting new runs once cumulative cost exceeds this (0 = no cap)",
+    )
+    p_run.add_argument(
+        "--cache-dir",
+        default=os.getenv("DRLEVAL_CACHE_DIR") or None,
+        help="content-addressed response cache directory (deterministic replay, no API calls on cache hit)",
     )
     p_run.set_defaults(func=cmd_run)
 

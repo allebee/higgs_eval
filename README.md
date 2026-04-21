@@ -94,6 +94,13 @@ python -m drleval.cli run --cases cases/ --out reports/ --concurrency 4 --repeat
   `DRLEVAL_MAX_USD`). Once spend exceeds the cap, new runs are admitted as
   `BudgetExceeded` error traces instead of calling the API. In-flight runs
   complete. Set to 0 to disable.
+- `--cache-dir PATH` (or `DRLEVAL_CACHE_DIR`) — content-addressed response
+  cache. When set, a sha256 of (model, system, messages, tools, max_tokens,
+  temperature) keys each Anthropic response to disk. Cache hit = no API
+  call, no cost, byte-identical reply. Enables deterministic replay: once
+  a trace is generated with the cache, the entire run can be regenerated
+  for free. Keep the cache dir alongside your fixture traces for
+  reviewer-reproducibility.
 
 ### Retry policy
 
@@ -240,6 +247,22 @@ Agent correctly:
 - Refused the prompt-extraction attempt (but via max_steps, see bug #1)
 - Got mitosis phases right
 
+## HTML viewer features
+
+Higgsfield-inspired dark theme, single static file, zero JS framework:
+
+- **Regression badge** sorts failing cases to the top, red pill.
+- **Deep-link** by case id: `reports/latest.html#case=foo` opens directly.
+- **Live filter** on the case list.
+- **Message-level diff** — when a previous run's trace exists for the same
+  case, a "± diff vs previous" toggle shows added/removed/changed messages
+  color-coded in the trace pane. Catches "agent skipped a tool call" at a
+  glance.
+- **Verdict panel pinned above the trace** — reviewer sees *why* it failed
+  before reading the trace.
+- **95% Wilson CI** on pass rate in the header.
+- Tool calls color-coded by name, latency badges, expandable I/O.
+
 ## Hard vs soft: defense in depth
 
 The hard `quotes_substring_grounded` metric and the page-aware
@@ -321,23 +344,34 @@ style. Mitigations:
 - **Rubric ambiguity**: we specifically wrote each rubric with pass/fail/
   partial criteria to reduce interpretation latitude.
 
-### Validation — real numbers, before and after
+### Validation — real numbers, three judges
 
 Committed: [`judge_validation.jsonl`](judge_validation.jsonl) — 17 judge
-verdicts across 13 cases, hand-labeled by me against the corpus. We ran the
-judge twice, once before and once after extending it with fetched-page
-access (see § Judge architecture above):
+verdicts across 13 cases, hand-labeled by me against the corpus. We ran
+**three judge configurations** on the same fixtures:
 
-| Judge | Agreement | Cohen's κ |
-|---|---|---|
-| **v1** — rubric only, no corpus access | 70.6% (12/17) | 0.32 |
-| **v2** — page-aware (`FETCHED_PAGES` in prompt) | **100% (17/17)** | **1.00** |
+| Judge | Agreement | Cohen's κ | Cost |
+|---|---|---|---|
+| **v1** — Haiku, no corpus access (original rubric) | 70.6% (12/17) | 0.32 | ~$0.06 |
+| **v2** — Haiku, page-aware (`FETCHED_PAGES` in prompt) | **100% (17/17)** | **1.00** | ~$0.18 |
+| **v3** — Sonnet 4.5, page-aware (cross-tier) | 94.1% (16/17) | 0.79 | ~$0.16 |
 
-All 5 v1 disagreements were in the `quote_grounded` rubric: the judge
-couldn't verify verbatim quotes without access to the page text, so it
-over-penalized "single URL citation with multiple claims" as probable
-paraphrase. Giving the judge the fetched pages and rewriting the rubric to
-say "check quotes against FETCHED_PAGES" resolved every one of them.
+**Takeaways:**
+- All 5 v1 disagreements were in `quote_grounded` — the judge couldn't
+  verify verbatim quotes without page text, so it over-penalized "single
+  URL citation with multiple claims" as probable paraphrase. Giving it the
+  fetched pages resolved every one.
+- **Cross-tier check (v3):** Sonnet 4.5 is a stronger-tier model in the
+  same provider family. 16/17 agreement with Haiku v2 is evidence that
+  the Haiku judge is not just rubber-stamping the Haiku agent's output.
+  The one disagreement (`conflicting_photosynthesis quote_grounded`) is
+  a genuinely borderline case: Sonnet flagged the contradiction between
+  the two photosynthesis pages showing up in the answer, Haiku accepted
+  the explicit quote as sufficiently grounded. Both are defensible.
+- **Not a true cross-*family* check** (would require e.g. `gpt-4o-mini`
+  from a different provider). Cross-tier is a proxy, not a replacement.
+  Methodology is the same; swapping the model is one env var:
+  `DRLEVAL_JUDGE_MODEL=claude-sonnet-4-5`.
 
 Per-rubric agreement under v2:
 
@@ -380,22 +414,20 @@ hijacked by its own ground-truth material.
 
 ## What I'd add next
 
-1. **Cross-family judge** — swap in a non-Anthropic model via
-   `DRLEVAL_JUDGE_MODEL` for a subset and measure self-preference bias
-   quantitatively. Rubric-driven evaluation + page-aware judging already
-   help; this would put a number on remaining bias.
-2. **Adversarial judge stress test** — generate answers that contain
-   plausible-looking but ungrounded quotes (via a mutator) and confirm
-   the page-aware judge catches them. Would validate that κ=1.0 holds
-   outside this fixture set.
-3. **Higher `--repeats`** for flakiness characterization (N=5–10 on every
-   case). The Wilson CIs in the reporter are ready; the only cost is API
-   spend.
-4. **Response-cache on Anthropic calls** — content-addressed replay so the
-   diff view shows real behavior changes, not model nondeterminism.
-5. **Golden-set promotion workflow** — fixture → golden after N consecutive
+1. **True cross-family judge** — we did cross-tier (Sonnet vs Haiku, same
+   provider). Adding a non-Anthropic model (e.g. `gpt-4o-mini`) would
+   quantify self-preference more rigorously. Blocked on having a second
+   provider key; architecture already supports it (`DRLEVAL_JUDGE_MODEL`).
+2. **Adversarial judge stress test** — synthesize ungrounded-but-plausible
+   answers via a mutator and confirm the page-aware judge catches them.
+   Validates κ=1.0 generalizes beyond this fixture set.
+3. **Higher `--repeats`** for flakiness characterization (5–10 per case).
+   Wilson CIs are ready in the reporter; the only cost is API spend.
+4. **Golden-set promotion workflow** — fixture → golden after N consecutive
    green runs; regressions against golden escalate louder than regressions
    against the previous run.
+5. **SDK AsyncAnthropic** — drop the sync-in-executor pattern for real
+   concurrent async at scale >16.
 
 ## Known limitations
 
@@ -406,6 +438,9 @@ hijacked by its own ground-truth material.
 - **Judge validation sample is small** (N=17). κ=1.0 on this fixture set is
   honest but can't be extrapolated to production-scale evaluation without
   a larger, more adversarial sample.
+- **Cross-family judge not done.** Cross-*tier* (Sonnet) is done and gives
+  94% agreement; cross-*family* (OpenAI/Google) would require a second
+  provider key.
 - **Sync Anthropic SDK in an executor pool** — `run_suite` is async for
   scheduling/semaphore/cost-governor semantics, but the agent itself uses
   the sync SDK inside `run_in_executor`. Fine up to ~16 concurrent; past
