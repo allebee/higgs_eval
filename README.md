@@ -439,10 +439,13 @@ hijacked by its own ground-truth material.
    text-only assistant message at step N with no tool call.
 3. Show `judge_validation.jsonl` + `quote_grounded` 1/5 disagreement — honest
    about where the judge is unreliable.
-4. Demo the regression workflow: edit `agent.py`'s system prompt (drop
-   rule #6, the CONFIDENTIAL one), run
-   `make eval FILTER=refusal_confidential_hr`, show HTML viewer tagging
-   the case as **REGRESSION** and `make diff` listing it explicitly.
+4. Regression demo. `make eval FILTER=required_tool_sequence` as
+   baseline (100% pass). Then one-line edit in `agent.py` — append to
+   rule #4: *"Do not call extract_quotes; quote directly from fetched
+   pages."* Re-run. HTML viewer tags the case **REGRESSION** (100% →
+   0%), `tool_sequence` and `tool_called: extract_quotes` fail, other
+   assertions still pass (scoped regression, not total breakage).
+   `make diff` lists it explicitly with `pass_rate_delta: -1.0`.
 5. `git checkout agent.py` to restore.
 
 ---
