@@ -1,5 +1,9 @@
 # DRL Eval — Evaluation framework for Deep Research Lite
 
+> 🇷🇺 **Краткое описание на русском** — см. [раздел в конце](#кратко-на-русском).
+
+
+
 An evaluation framework for the **Deep Research Lite** agent (`agent.py` +
 `tools.py`, described in [AGENT_README.md](AGENT_README.md)). The agent is
 treated as a black box: this framework wraps it, never modifies it.
@@ -440,3 +444,65 @@ hijacked by its own ground-truth material.
    show HTML viewer tagging the case as **REGRESSION** and `make diff`
    listing it explicitly.
 5. `git checkout agent.py` to restore.
+
+---
+
+## Кратко на русском
+
+### Задача
+Построить **фреймворк оценки** (evaluation framework) для shipped-агента
+`deep-research-lite` (~400 LOC, Anthropic SDK, 4 инструмента:
+`web_search`, `fetch_url`, `extract_quotes`, `finish`). Агент — чёрный
+ящик, не трогаем. Фреймворк должен: грузить YAML-кейсы с hard (детерм.)
+и soft (LLM-judge) проверками, запускать параллельно с retry только на
+429/5xx, сохранять полные traces, пересчитывать score без повторных
+вызовов агента, выдавать HTML-отчёт с diff vs previous run, поддерживать
+flakiness через `--repeats N`, иметь плагин-архитектуру для метрик.
+Минимум 10 адверсариально подобранных кейсов под этого конкретного агента.
+
+### Что сделано
+- Пакет `drleval/` (~1800 LOC): runner (async + semaphore + cost
+  governor `DRLEVAL_MAX_USD`), scorer, reporter (Wilson 95% CI),
+  judge, HTML viewer, CLI
+- **13 YAML-кейсов** (happy / ambiguous / refusal / injection / units /
+  conflicting sources / broken-page / prompt-extraction / faithfulness /
+  efficiency) + **7 рубрик**
+- **26 unit-тестов** офлайн, <1 с
+- **Page-aware judge**: рубрикам faithfulness передаётся текст
+  fetched-страниц как источник истины; защита от prompt-injection
+  одновременно через agent output И через содержимое корпуса
+  (`meiosis-detail.md` содержит `IGNORE PREVIOUS INSTRUCTIONS`)
+- **15 реальных traces** захвачены на живом прогоне `claude-haiku-4-5`
+- Judge validation: 17 hand-labeled вердиктов в
+  [`judge_validation.jsonl`](judge_validation.jsonl) с колонками v1/v2
+
+### Результаты
+- **Hard-only pass rate: 12/15 (80%)**
+- **Agent+judge pass rate: 6/13 (46%)**
+- **Total spend: ~$0.53** за все прогоны
+- **Judge agreement:** v1 (без страниц) 70.6%, κ=0.32 → **v2 (page-aware)
+  100%, κ=1.00**
+
+### Найденные реальные баги агента
+1. **Агент не вызывает `finish()` при отказах** — валится в text-only
+   fallthrough в [agent.py:187-193](agent.py#L187), `stopped_reason=max_steps`.
+   Детерминированно на 3 разных кейсах (refusal / out-of-corpus /
+   prompt-extraction). Нарушает rule #3 системного промпта.
+2. Конфиденциальный контент **протекает в текст отказа** ("internal use
+   only" повторяется из закрытой страницы).
+3. **Неоднозначные вопросы** агент молча решает в пользу одной
+   интерпретации (Voyager probe → всегда V1, никогда не V2, никогда не
+   уточнение).
+4. На **конфликтующих источниках** агент мешает правильный ответ с
+   ошибкой из mirror-страницы (photosynthesis).
+5. `extract_quotes` hallucination на этом прогоне не сработал, но
+   hard-чек `quotes_substring_grounded` готов и проверен на adversarial
+   fixture в `tests/`.
+
+### Что ещё можно добавить
+1. Cross-family judge (не-Anthropic модель) для измерения self-preference bias
+2. Adversarial стресс-тест judge'а: мутированные ответы с
+   правдоподобными-но-ungrounded цитатами
+3. Больший `--repeats` (5-10) для реальной характеристики flakiness
+4. Content-addressed кэш на Anthropic-вызовы для детерминированного replay
+5. Golden-set promotion workflow
