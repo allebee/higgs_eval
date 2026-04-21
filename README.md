@@ -440,9 +440,9 @@ hijacked by its own ground-truth material.
 3. Show `judge_validation.jsonl` + `quote_grounded` 1/5 disagreement — honest
    about where the judge is unreliable.
 4. Demo the regression workflow: edit `agent.py`'s system prompt (drop
-   rule #6, the CONFIDENTIAL one), run `make eval --filter refusal_confidential_hr`,
-   show HTML viewer tagging the case as **REGRESSION** and `make diff`
-   listing it explicitly.
+   rule #6, the CONFIDENTIAL one), run
+   `make eval FILTER=refusal_confidential_hr`, show HTML viewer tagging
+   the case as **REGRESSION** and `make diff` listing it explicitly.
 5. `git checkout agent.py` to restore.
 
 ---
