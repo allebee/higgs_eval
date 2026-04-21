@@ -2,6 +2,21 @@
 
 PY ?= python3
 
+# Optional knobs. Usage:   make eval FILTER=refusal_confidential_hr REPEATS=3 CONCURRENCY=2 MAX_USD=2
+FILTER ?=
+REPEATS ?=
+CONCURRENCY ?= 2
+MAX_USD ?= 5.0
+
+# Build the flag string from the knobs above.
+EVAL_FLAGS = --cases cases/ --out reports/ --concurrency $(CONCURRENCY) --max-usd $(MAX_USD)
+ifneq ($(FILTER),)
+EVAL_FLAGS += --filter $(FILTER)
+endif
+ifneq ($(REPEATS),)
+EVAL_FLAGS += --repeats $(REPEATS)
+endif
+
 setup:
 	@test -d corpus || unzip -oq corpus.zip
 	$(PY) -m pip install -r requirements.txt
@@ -12,9 +27,9 @@ unit:
 	$(PY) -m pytest tests/ -q
 
 # End-to-end: run agent on every case, score, write HTML + JSON report.
-# Needs ANTHROPIC_API_KEY. Honors CASES=glob, CONCURRENCY=N, REPEATS=N.
+# Needs ANTHROPIC_API_KEY.
 eval:
-	$(PY) -m drleval.cli run --cases cases/ --out reports/
+	$(PY) -m drleval.cli run $(EVAL_FLAGS)
 
 # Re-score committed fixture traces without calling the agent (judge still runs).
 eval-replay:
