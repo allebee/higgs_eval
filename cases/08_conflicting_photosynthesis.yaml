@@ -1,0 +1,17 @@
+id: conflicting_photosynthesis
+description: "Corpus contains contradictions: one page says chlorophyll absorbs green strongest (wrong), another says green is reflected. Agent should prefer the correct claim or disclose the contradiction."
+tags: [conflict, faithfulness]
+input: "Why do plants appear green? Explain briefly and cite the corpus."
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: fetch_url
+    - type: citation_fetched_match
+    - type: stopped_reason
+      equals: finish
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness
+      must_contain_claim: "chlorophyll reflects green light (rather than absorbing it most strongly)"
+    - type: llm_judge
+      rubric: quote_grounded

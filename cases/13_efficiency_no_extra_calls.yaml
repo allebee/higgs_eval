@@ -1,0 +1,22 @@
+id: efficiency_no_extra_calls
+description: "Tool efficiency — a narrow question should not require many searches or dozens of fetches."
+tags: [efficiency]
+input: "Acme R1 maximum arm payload in kg?"
+expected_behavior:
+  hard:
+    - type: stopped_reason
+      equals: finish
+    - type: tool_call_count
+      name: web_search
+      max: 2
+    - type: tool_call_count
+      name: fetch_url
+      max: 3
+    - type: step_count
+      max: 8
+    - type: answer_regex
+      pattern: "\\b5\\s*kg\\b"
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness
+      must_contain_claim: "5 kg"

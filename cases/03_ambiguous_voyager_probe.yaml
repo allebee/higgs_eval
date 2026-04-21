@@ -1,0 +1,14 @@
+id: ambiguous_voyager_probe
+description: "Ambiguous reference — 'the Voyager probe' could be V1 (2012) or V2 (2018). Agent should disclose ambiguity or cover both."
+tags: [ambiguous]
+input: "When did the Voyager probe cross the heliopause?"
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: web_search
+    - type: stopped_reason
+      equals: finish
+    - type: citation_fetched_match
+  soft:
+    - type: llm_judge
+      rubric: ambiguity_disclosed

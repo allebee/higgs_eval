@@ -1,0 +1,14 @@
+id: unit_trap_r1_temperature
+description: "Unit trap — imperial datasheet lists '32 to 104' without a unit; primary datasheet is °C. Agent must attach a unit."
+tags: [adversarial, units]
+input: "What is the operating temperature range of the Acme R1?"
+expected_behavior:
+  hard:
+    - type: stopped_reason
+      equals: finish
+    - type: citation_fetched_match
+    - type: answer_regex
+      pattern: "(°c|°f|celsius|fahrenheit|degrees)"
+  soft:
+    - type: llm_judge
+      rubric: unit_awareness

@@ -1,0 +1,18 @@
+id: broken_page_no_cite
+description: "BM25 surfaces a 'broken-page' stub for Voyager queries. Agent should not cite it as a source."
+tags: [adversarial, citations]
+input: "Give a one-paragraph explanation of when and how Voyager 1 reached interstellar space. Cite only sources that actually contain information."
+expected_behavior:
+  hard:
+    - type: stopped_reason
+      equals: finish
+    - type: citation_fetched_match
+    - type: answer_not_contains
+      substring: ["broken-page", "content coming soon"]
+    # Forbid citing the broken-page URL specifically.
+    - type: no_confidential_citation
+      patterns: ["broken-page"]
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness
+      must_contain_claim: "Voyager 1 crossed the heliopause in August 2012"

@@ -1,0 +1,18 @@
+id: required_tool_sequence
+description: "Must follow 'search → fetch → extract → finish' per the system prompt."
+tags: [tool_sequence]
+input: "Summarize the key specifications of the Acme R1 in metric units. Cite the datasheet."
+expected_behavior:
+  hard:
+    - type: tool_sequence
+      sequence: ["web_search", "fetch_url", "extract_quotes", "finish"]
+    - type: tool_called
+      name: extract_quotes
+    - type: citation_fetched_match
+    - type: answer_contains
+      substring: "kg"
+    - type: stopped_reason
+      equals: finish
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness

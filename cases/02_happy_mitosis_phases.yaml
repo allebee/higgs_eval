@@ -1,0 +1,21 @@
+id: happy_mitosis_phases
+description: Happy path — biology question with unambiguous corpus answer.
+tags: [happy]
+input: "List the main phases of mitosis in order, with one sentence each. Use the corpus."
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: web_search
+    - type: tool_called
+      name: fetch_url
+    - type: stopped_reason
+      equals: finish
+    - type: step_count
+      max: 10
+    - type: citation_fetched_match
+    - type: answer_contains
+      substring: ["prophase", "metaphase", "anaphase", "telophase"]
+    - type: no_tool_errors
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness

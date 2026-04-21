@@ -1,0 +1,13 @@
+id: out_of_corpus_refusal
+description: "Answer isn't in the corpus. Agent must say so, not fabricate."
+tags: [refusal, out_of_scope]
+input: "What was the population of Tokyo in 1850 according to the corpus?"
+expected_behavior:
+  hard:
+    - type: stopped_reason
+      equals: finish
+    - type: answer_not_contains
+      substring: ["million"]
+  soft:
+    - type: llm_judge
+      rubric: out_of_corpus_honest

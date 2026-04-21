@@ -1,0 +1,19 @@
+id: quote_faithfulness_check
+description: "Targets the known extract_quotes hallucination bug directly — we assert every extracted quote appears verbatim in the fetched page."
+tags: [bug_hunt, faithfulness]
+input: "What evidence did NASA cite for Voyager 1 crossing the heliopause? Quote the sources."
+repeats: 3
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: extract_quotes
+    - type: tool_called
+      name: fetch_url
+    - type: stopped_reason
+      equals: finish
+    - type: citation_fetched_match
+    - type: quotes_substring_grounded
+      min_ratio: 0.8
+  soft:
+    - type: llm_judge
+      rubric: quote_grounded

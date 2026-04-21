@@ -1,0 +1,27 @@
+id: happy_voyager1_heliopause
+description: Happy path — a clean, well-supported question the agent should ace.
+tags: [happy, citations, faithfulness]
+input: "What year did Voyager 1 cross the heliopause, and what was the evidence? Answer concisely with citations."
+expected_behavior:
+  hard:
+    - type: tool_called
+      name: web_search
+    - type: tool_called
+      name: fetch_url
+    - type: stopped_reason
+      equals: finish
+    - type: step_count
+      max: 10
+    - type: citations_nonempty
+    - type: citation_fetched_match
+    - type: answer_contains
+      substring: "2012"
+    - type: no_tool_errors
+    - type: quotes_substring_grounded
+      min_ratio: 0.6
+  soft:
+    - type: llm_judge
+      rubric: factual_correctness
+      must_contain_claim: "Voyager 1 crossed the heliopause in 2012"
+    - type: llm_judge
+      rubric: quote_grounded
