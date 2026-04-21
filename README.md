@@ -1,28 +1,31 @@
 # DRL Eval — Evaluation framework for Deep Research Lite
 
+> 🎥 **Loom walkthrough (4 min):** https://www.loom.com/share/50452061e9394ef28d5001b6c9227631
+>
 > 🇷🇺 **Краткое описание на русском** — см. [раздел в конце](#кратко-на-русском).
-
-
 
 An evaluation framework for the **Deep Research Lite** agent (`agent.py` +
 `tools.py`, described in [AGENT_README.md](AGENT_README.md)). The agent is
 treated as a black box: this framework wraps it, never modifies it.
 
+**At a glance:** 15 cases · 7 rubrics · 17 real fixture traces · 33 unit tests · page-aware LLM judge with κ=1.00 on N=17 hand-labeled verdicts · Higgsfield-themed HTML viewer · total live API spend to ship: ~$0.90.
+
 ## TL;DR
 
 ```bash
 make setup                 # install deps, unzip corpus
-make test                  # unit tests, offline, <1s
+make test                  # 33 unit tests, offline, <1s
 
-# End-to-end against the real agent (needs ANTHROPIC_API_KEY, ~$1-3 per suite):
+# Offline rescore against 17 committed fixture traces (no API key needed):
+make eval-replay
+make view                  # opens reports/latest.html
+
+# End-to-end against the real agent (needs ANTHROPIC_API_KEY, ~$0.20 per full suite):
 cp .env.example .env && $EDITOR .env
 make eval
 
-# Re-score committed fixture traces — no agent calls:
-python -m drleval.cli rescore --traces fixtures/traces/ --cases cases/ --out reports/ --no-judge
-
-# Open the HTML report:
-make view         # opens reports/latest.html
+# Run a single case:
+make eval FILTER=quote_faithfulness_check REPEATS=3
 
 # Diff against the prior run:
 make diff
@@ -30,12 +33,12 @@ make diff
 
 ## What it gives you
 
-- **One-command setup & tests** (`make test` → 14 unit tests, offline).
-- **13 YAML cases** covering happy paths, ambiguity, refusals, injection,
-  tool-sequence, unit traps, conflicting sources, out-of-corpus, efficiency,
-  and faithfulness.
-- **15+ pluggable metrics** (one file per module; `@register` decorator — no
-  runner/scorer changes needed to add a new metric).
+- **One-command setup & tests** (`make test` → 33 unit tests, offline, <1s).
+- **15 YAML cases** covering happy paths, ambiguity, refusals (incl.
+  over-refusal), injection, tool-sequence, unit traps, conflicting sources,
+  out-of-corpus, efficiency, faithfulness, and multi-page synthesis.
+- **20+ pluggable metrics** (`@register` decorator — no runner/scorer
+  changes needed to add a new metric).
 - **Async runner** with a semaphore, exponential-jitter retry on 429/5xx/
   network errors only (assertion failures **never** retry), and run-level
   parallelism that respects a concurrency cap.
@@ -69,10 +72,11 @@ drleval/                       # framework package
 ├── reporter.py                # aggregate stats, JSON report, diff
 ├── viewer.py                  # single-file HTML viewer (vanilla JS)
 └── cli.py                     # run / rescore / diff / view
-cases/                         # 13 YAML cases
+cases/                         # 15 YAML cases
 rubrics/                       # 7 markdown rubrics (one per judge check)
-tests/                         # offline unit tests (no API)
-fixtures/traces/               # 3 committed fixture traces for reproducibility
+tests/                         # 33 offline unit tests (no API)
+fixtures/traces/               # 17 committed fixture traces for reproducibility
+judge_validation.jsonl         # hand-labeled judge verdicts + agreement metrics
 ```
 
 ## How to run
@@ -166,7 +170,7 @@ def my_check(trace, case, *, threshold: float, **_) -> Verdict: ...
 
 ## Test suite coverage
 
-13 cases (`cases/*.yaml`) — one file per case. They map to the required
+15 cases (`cases/*.yaml`) — one file per case. They map to the required
 categories:
 
 | # | Case | Category | Hypothesis |
@@ -184,10 +188,12 @@ categories:
 | 11 | `quote_faithfulness_check` | bug hunt | `extract_quotes` paraphrases — caught by `quotes_substring_grounded` |
 | 12 | `system_prompt_extraction` | adversarial | user tries to exfiltrate the system prompt |
 | 13 | `efficiency_no_extra_calls` | efficiency | narrow question, must not over-fetch |
+| 14 | `over_refusal_press_contact` | refusal | public press Q — must NOT refuse |
+| 15 | `multipage_synthesis_voyager` | synthesis | compare V1 and V2 across pages |
 
 ## Bugs I found in the shipped agent
 
-Run on 13 cases with `repeats=1` (plus `quote_faithfulness_check` × 3), `claude-haiku-4-5`, concurrency=2, total spend **$0.19**. Hard-only pass rate: **12/15 (80%)**. Full agent+judge pass rate: **6/13 (46%)**. The framework surfaced the following real behavioral issues:
+Run on 15 cases with `repeats=1` (plus `quote_faithfulness_check` × 3), `claude-haiku-4-5`, concurrency=2, total spend **$0.19**. Hard-only pass rate: **14/17 (82.4%)**. The framework surfaced the following real behavioral issues:
 
 ### 1. Refusal branch never calls `finish()` — deterministic, 3 cases
 
@@ -379,8 +385,9 @@ style. Mitigations:
 ### Validation — real numbers, three judges
 
 Committed: [`judge_validation.jsonl`](judge_validation.jsonl) — 17 judge
-verdicts across 13 cases, hand-labeled by me against the corpus. We ran
-**three judge configurations** on the same fixtures:
+verdicts across 13 cases (fixtures captured before cases 14–15 were added),
+hand-labeled by me against the corpus. We ran **three judge configurations**
+on the same fixtures:
 
 | Judge | Agreement | Cohen's κ | Cost |
 |---|---|---|---|
@@ -535,7 +542,7 @@ flakiness через `--repeats N`, иметь плагин-архитектур
 - Пакет `drleval/` (~1800 LOC): runner (async + semaphore + cost
   governor `DRLEVAL_MAX_USD`), scorer, reporter (Wilson 95% CI),
   judge, HTML viewer, CLI
-- **13 YAML-кейсов** (happy / ambiguous / refusal / injection / units /
+- **15 YAML-кейсов** (happy / ambiguous / refusal / over-refusal / injection / units /
   conflicting sources / broken-page / prompt-extraction / faithfulness /
   efficiency) + **7 рубрик**
 - **26 unit-тестов** офлайн, <1 с
