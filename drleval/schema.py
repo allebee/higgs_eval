@@ -157,6 +157,34 @@ class CaseAggregate(BaseModel):
     def flaky(self) -> bool:
         return 0 < self.pass_count < len(self.runs)
 
+    def metric_variance(self) -> list[dict[str, object]]:
+        """Per-metric pass-rate across the N repeats.
+
+        Task requires "variance per metric, not a hidden average" when
+        --repeats > 1. This is how we expose it: each metric's pass count
+        and which run indices it failed on.
+        """
+        by_metric: dict[str, list[bool]] = {}
+        fail_indices: dict[str, list[int]] = {}
+        for run in self.runs:
+            for v in run.verdicts:
+                by_metric.setdefault(v.metric, []).append(v.passed)
+                if not v.passed:
+                    fail_indices.setdefault(v.metric, []).append(run.run_index)
+        out = []
+        for metric, results in sorted(by_metric.items()):
+            passed = sum(1 for r in results if r)
+            total = len(results)
+            out.append({
+                "metric": metric,
+                "passed": passed,
+                "total": total,
+                "pass_rate": passed / total if total else 0.0,
+                "flaky": 0 < passed < total,
+                "failed_on_runs": fail_indices.get(metric, []),
+            })
+        return out
+
 
 class RunReport(BaseModel):
     run_id: str

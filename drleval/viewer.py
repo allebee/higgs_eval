@@ -161,6 +161,13 @@ HTML_TEMPLATE = r"""<!doctype html>
  .diff-label.changed {{ background:var(--flaky); color:#111; }}
 
  .empty {{ padding:28px; text-align:center; color:var(--text-faint); }}
+
+ .mv-row {{
+   display:flex; gap:10px; align-items:center;
+   padding:6px 12px; border:1px solid var(--border); border-radius:6px;
+   margin:4px 0; background:var(--surface);
+ }}
+ .mv-metric {{ font-family:var(--mono); font-size:12px; color:var(--text); }}
 </style></head>
 <body>
 <header>
@@ -291,16 +298,34 @@ function select(id) {{
     ? `<button class="btn ${{diffMode?'active':''}}" onclick="toggleDiff('${{id}}')">${{diffMode?'✓ ':'± '}}diff vs previous</button>`
     : '<span class="muted" style="padding:6px 0;">(no previous run to diff)</span>';
 
+  // Per-metric variance panel — shown when --repeats > 1.
+  let varianceHtml = '';
+  const mv = c.metric_variance || [];
+  if (c.runs.length > 1 && mv.length) {{
+    const rows = mv.map(m => {{
+      const pct = Math.round(m.pass_rate*100);
+      const cls = m.passed === m.total ? 'pass' : (m.passed === 0 ? 'fail' : 'flaky');
+      const failed = m.failed_on_runs && m.failed_on_runs.length ? ` · failed on runs [${{m.failed_on_runs.join(',')}}]` : '';
+      return `<div class="mv-row">
+        <span class="pill ${{cls}}">${{m.passed}}/${{m.total}}</span>
+        <span class="mv-metric">${{esc(m.metric)}}</span>
+        <span class="muted">${{pct}}% pass${{failed}}</span>
+      </div>`;
+    }}).join('');
+    varianceHtml = `<h3>Per-metric variance (repeats=${{c.runs.length}})</h3>${{rows}}`;
+  }}
+
   right.innerHTML = `
     <h2>${{esc(c.case_id)}}</h2>
     <p class="muted">runs ${{c.runs.filter(r=>r.passed).length}}/${{c.runs.length}} passed
       · stopped=${{esc(run.stopped_reason||'?')}}
       · ${{run.wall_time_ms||0}}ms · $${{(run.cost_usd||0).toFixed(4)}}
       · <span class="hash">hash=${{esc(run.trace_hash||'')}}</span></p>
-    <h3>Verdicts</h3>
+    ${{varianceHtml}}
+    <h3>Verdicts${{c.runs.length>1?' (run 0)':''}}</h3>
     ${{verdicts || '<p class="muted">no verdicts</p>'}}
     <div class="actions">
-      <h3 style="margin:0; padding-top:6px;">Trace</h3>
+      <h3 style="margin:0; padding-top:6px;">Trace${{c.runs.length>1?' (run 0)':''}}</h3>
       <div style="margin-left:auto;">${{diffBtn}}</div>
     </div>
     ${{traceHtml || '<p class="muted" style="margin-top:10px;">no trace data (error run?)</p>'}}

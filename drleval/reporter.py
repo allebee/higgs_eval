@@ -86,6 +86,10 @@ def write_report(report: RunReport, out_dir: Path) -> tuple[Path, Path]:
         (out_dir / "previous.json").write_text(json_path.read_text())
     data = report.model_dump()
     data["aggregate"] = aggregate_stats(report.cases)
+    # Per-metric variance for each case — required by task when repeats > 1.
+    # Always emitted (trivially N=1 when no repeats) so the shape is stable.
+    for i, c in enumerate(report.cases):
+        data["cases"][i]["metric_variance"] = c.metric_variance()
     json_path.write_text(json.dumps(data, indent=2, default=str))
     return json_path, out_dir
 
