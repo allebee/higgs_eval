@@ -31,9 +31,16 @@ unit:
 eval:
 	$(PY) -m drleval.cli run $(EVAL_FLAGS)
 
-# Re-score committed fixture traces without calling the agent (judge still runs).
+# Re-score committed fixture traces. Default is offline (hard assertions
+# only, no judge calls) — fast and free for demos and graders without an
+# API key. Set WITH_JUDGE=1 to re-run soft assertions through the judge.
+WITH_JUDGE ?=
+REPLAY_FLAGS = --traces fixtures/traces/ --cases cases/ --out reports/
+ifeq ($(WITH_JUDGE),)
+REPLAY_FLAGS += --no-judge
+endif
 eval-replay:
-	$(PY) -m drleval.cli rescore --traces fixtures/traces/ --cases cases/ --out reports/
+	$(PY) -m drleval.cli rescore $(REPLAY_FLAGS)
 
 diff:
 	$(PY) -m drleval.cli diff --current reports/latest.json --previous reports/previous.json
